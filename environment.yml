@@ -17,7 +17,7 @@ dependencies:
   - python
   - r-base
   - r-irkernel=1.1
-  - r-devtools=2.2
+  - r-devtools
   - tini=0.18.0
   - notebook=6.0.3
   - jupyterhub=1.1.0
@@ -29,8 +29,18 @@ dependencies:
   - r-snakecase
   - r-languageserver==0.3.5
   - conda-forge::nb_conda_kernels
+  # Rmarkdown dependencies
+  - r-base=4.0.3
+  - r-magrittr
+  - r-dt
+  - r-htmltools
+  - r-stringr
+  - r-dplyr
+  - r-kableextra
+  - fonts-anaconda
   # For using the plotting library ggstatsplot
   - r-ggstatsplot
   - r-tidyverse
   - r-gapminder
+
 

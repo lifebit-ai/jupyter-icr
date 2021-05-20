@@ -50,6 +50,11 @@ def helpMessage() {
  *      CHANNELS SETUP           *
  *********************************/
 
+// Notebook files staging
+projectDir = workflow.projectDir
+ch_jupyter_notebook =  Channel.value(file("${projectDir}/bin/ggbetweenstats.ipynb"))
+ch_rmarkdown_notebook =  Channel.value(file("${projectDir}/bin/ggbetweenstats.Rmd"))
+
 // Values
 all_plot_types  = ['box', 'violin', 'boxviolin']
 some_continents = ['Oceania','Europe','Africa']
@@ -63,6 +68,8 @@ if (params.design_file.endsWith(".csv")) {
                         .set { ch_design_file }
                         }
 
+(ch_design_file_jupyter, ch_design_file_rmd) = ch_design_file.into(2)
+
 /*********************************
  *          PROCESSES            *
  *********************************/
@@ -75,17 +82,19 @@ if (!params.design_file) {
  process run_notebook {
 
     publishDir "${params.outdir}/", mode: 'copy'
+    input:
+    file(input_notebook_jupyter) from ch_jupyter_notebook
 
     output:
     file("${params.year}_${params.plot_type}_output.ipynb")
 
     script:
     """
-    papermill /opt/bin/ggbetweenstats.ipynb ${params.year}_${params.plot_type}_output.ipynb \
+    papermill  ${input_notebook_jupyter} ${params.year}_${params.plot_type}_output.ipynb \
     --kernel ir \
     -p year ${params.year} \
-    -p plot_type ${params.plot_type}  \
-    -p continent_to_exclude ${params.continent_to_exclude}  
+    -p plot_type "${params.plot_type}""  \
+    -p continent_to_exclude "${params.continent_to_exclude}"  
     """
  }
 }
@@ -93,6 +102,7 @@ if (!params.design_file) {
 /*
  * Execute many notebook, combinations of values
  */
+ if (params.run_combinations) {
  process run_many_notebooks {
     tag "${year}-${plot_type}-${continent}"
 
@@ -102,13 +112,37 @@ if (!params.design_file) {
     each year from few_years
     each continent from some_continents
     each plot_type from all_plot_types
+    file(input_notebook_jupyter) from ch_jupyter_notebook
 
     output:
     file("${year}_${plot_type}_output.ipynb")
 
     script:
     """
-    papermill /opt/bin/ggbetweenstats.ipynb "${year}_${plot_type}"_output.ipynb \
+    papermill ${input_notebook_jupyter} "${year}_${plot_type}"_output.ipynb \
+    --kernel ir \
+    -p year ${year} \
+    -p plot_type ${plot_type}  \
+    -p continent_to_exclude ${continent}
+    """
+    }
+ }
+
+ process run_from_design_file_notebooks_jupyter {
+    tag "${year}-${plot_type}-${continent}"
+
+    publishDir "${params.outdir}/jupyter", mode: 'copy'
+
+    input:
+    tuple val(plot_type), val(continent), val(year) from ch_design_file_jupyter
+    file(input_notebook_jupyter) from ch_jupyter_notebook
+
+    output:
+    file("${year}_${plot_type}_output.ipynb")
+
+    script:
+    """
+    papermill ${input_notebook_jupyter} "${year}_${plot_type}"_output.ipynb \
     --kernel ir \
     -p year ${year} \
     -p plot_type ${plot_type}  \
@@ -116,23 +150,23 @@ if (!params.design_file) {
     """
 }
 
- process run_from_design_file_notebooks {
+ if (params.run_rmd) {
+ process run_from_design_file_notebooks_rmd {
     tag "${year}-${plot_type}-${continent}"
 
-    publishDir "${params.outdir}/", mode: 'copy'
+    publishDir "${params.outdir}/rmarkdown", mode: 'copy'
 
     input:
-    tuple val(plot_type), val(continent), val(year) from ch_design_file
+    tuple val(plot_type), val(continent), val(year) from ch_design_file_rmd
+    file(input_notebook_rmarkdown) from ch_rmarkdown_notebook
 
     output:
-    file("${year}_${plot_type}_output.ipynb")
+    file("*output.html")
 
     script:
     """
-    papermill /opt/bin/ggbetweenstats.ipynb "${year}_${plot_type}"_output.ipynb \
-    --kernel ir \
-    -p year ${year} \
-    -p plot_type ${plot_type}  \
-    -p continent_to_exclude ${continent}
+    cp $input_notebook_rmarkdown output_${input_notebook_rmarkdown}
+    Rscript -e "rmarkdown::render('output_${input_notebook_rmarkdown}', output_format = 'html_document', output_dir = '.' , list(year='$year',plot_type='$plot_type',continent_to_exclude='$continent'))"
     """
+ }
 }
